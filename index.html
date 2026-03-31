@@ -551,36 +551,44 @@ function parseSource(source, raw) {
   try {
     const data = JSON.parse(raw);
 
-    // raptor_one_yahoo → oggetto con chiave ts + dati per ticker
-    // struttura: {"ts":"...", "TICKER": {...}, ...} oppure {"TICKER":{score,signal,...}}
+    // raptor_one_yahoo → oggetto {"ts":"...", "TICKER":{price, change, score, signal, ...}}
     if (source === 'RAPTOR One') {
       const obj = Array.isArray(data) ? {} : data;
       for (const [key, v] of Object.entries(obj)) {
         if (key === 'ts' || typeof v !== 'object' || v === null) continue;
-        // Cerca il ticker nel valore o usa la chiave
         const ticker = v.ticker || v.display || key;
-        // Cerca score in vari campi possibili
-        const score = v.totalScore ?? v.score ?? v.techScore ?? v.Score ?? 0;
-        if (score === 0 && !v.signal && !v.Signal) continue;
-        const signal = v.signal || v.Signal || scoreToSignalLocal(normalizeScore(score));
-        const change = v.change ?? v.chg ?? v.Chg ?? v['Sett%'] ?? null;
-        result[ticker] = { ticker, score: normalizeScore(score), signal, change, launchScore: v.launchScore ?? null };
+        const score = normalizeScore(v.totalScore ?? v.score ?? v.techScore ?? v.Score ?? 0);
+        if (score === 0 && !v.signal && !v.Signal && !v.stato) continue;
+        const signal = v.signal || v.Signal || scoreToSignalLocal(score);
+        const change = v.change ?? v.chg ?? v.perfSett ?? null;
+        const name = v.nome || v.name || v.display || ticker;
+        result[ticker] = { ticker, score, signal, change, launchScore: v.launchScore ?? null, name };
       }
     }
 
-    // raptor_ranking → array [{ticker/display, score, signal, chg/change, ...}]
+    // raptor_ranking → array con campi: ticker, display, nome, score, stato, er,
+    //   perfSett, perfMese, entryDate, rank, ...
     else if (source === 'RAPTOR Two' && Array.isArray(data)) {
       for (const v of data) {
         const ticker = v.ticker || v.display || v.Ticker;
         if (!ticker) continue;
-        // Score può essere in vari campi — RAPTOR Two usa score proprietario > 100
-        const rawScore = v.score ?? v.Score ?? v.totalScore ?? v.ER ?? 0;
-        const score = normalizeScore(rawScore);
-        const signal = v.signal || v.Signal || scoreToSignalLocal(score);
-        // Change: cerca in vari campi
-        const change = v.change ?? v.chg ?? v['Sett%'] ?? v.sett ?? v['Mese%'] ?? null;
-        const launchScore = v.launchScore ?? null;
-        result[ticker] = { ticker, score, signal, change, launchScore };
+        // score è già 0-100
+        const score = v.score ?? v.Score ?? 0;
+        // stato → converti in BUY/HOLD/SELL
+        const stato = (v.stato || v.uscita || '').toString().toUpperCase();
+        let signal;
+        if (stato.includes('VERDE') || stato.includes('LONG CONF') || stato.includes('LONG_CONF')) signal = 'BUY';
+        else if (stato.includes('EARLY') || stato.includes('WATCH') || stato.includes('ATTENZIONE')) signal = 'HOLD';
+        else if (stato.includes('GRIGIO') || stato.includes('STOP') || stato.includes('USCITA') || stato.includes('ROSSO')) signal = 'SELL';
+        else signal = scoreToSignalLocal(score);
+        // Change: usa perfSett (settimanale) come riferimento principale
+        const change = v.perfSett ?? v.perfMese ?? v.change ?? null;
+        // entryDate: data inizio trend
+        const entryDate = v.entryDate || null;
+        // er: Efficiency Ratio — utile come proxy del momentum
+        const er = v.er ?? null;
+        const name = v.nome || v.display || ticker;
+        result[ticker] = { ticker, score, signal, change, launchScore: null, entryDate, er, name, stato: v.stato };
       }
     }
 
@@ -653,9 +661,15 @@ function loadLocalSignals() {
   }
 
   // Sort by score desc, take top 20
+  // Priorità: BUY prima, poi ordina per score desc
   const sorted = Object.values(tickerMap)
     .filter(s => s.signal === 'BUY' || s.signal === 'HOLD')
-    .sort((a,b) => b.score - a.score)
+    .sort((a,b) => {
+      // BUY prima di HOLD
+      if (a.signal === 'BUY' && b.signal !== 'BUY') return -1;
+      if (b.signal === 'BUY' && a.signal !== 'BUY') return 1;
+      return b.score - a.score;
+    })
     .slice(0, 20);
 
   // DEBUG — mostra cosa c'è nel localStorage
@@ -708,19 +722,22 @@ function loadLocalSignals() {
   document.getElementById('signals-list').innerHTML = sorted.map(s => {
     const sigCls = s.signal === 'BUY' ? 'pill-buy' : s.signal === 'SELL' ? 'pill-sell' : s.signal === 'HOLD' ? 'pill-hold' : 'pill-na';
     const scoreCls = s.score >= 65 ? 'pos' : s.score >= 42 ? 'neu' : 'neg';
-    const chgStr = s.change != null ? (s.change >= 0 ? '+' : '') + s.change.toFixed(2) + '%' : '—';
-    const chgCls = s.change == null ? 'neu' : s.change >= 0 ? 'pos' : 'neg';
+    const chgRaw = s.change;
+    const chgStr = chgRaw != null ? (chgRaw >= 0 ? '+' : '') + Number(chgRaw).toFixed(2) + '%' : '—';
+    const chgCls = chgRaw == null ? 'neu' : chgRaw >= 0 ? 'pos' : 'neg';
     const sources = s.sources.map(src => `<span class="badge-source ${SOURCE_BADGE[src] || ''}">${src}</span>`).join(' ');
-    const launchStr = s.launchScore != null
-      ? `<span class="signal-launch">${s.launchScore >= 70 ? '🔥' : '📡'} ${s.launchScore}</span>`
-      : '<span style="color:var(--text3)">—</span>';
+    // Entry date (da RAPTOR Two)
+    const entryStr = s.entryDate ? `<span style="font-size:9px;color:var(--text3)">📅 ${s.entryDate}</span>` : '';
+    // ER (Efficiency Ratio da RAPTOR Two)
+    const erStr = s.er != null ? `<span style="font-size:9px;color:var(--blue)">ER ${s.er.toFixed(2)}</span>` : '';
+    const name = s.name && s.name !== s.ticker ? `<div style="font-size:9px;color:var(--text3);margin-top:1px;max-width:140px;overflow:hidden;text-overflow:ellipsis">${s.name}</div>` : '';
     return `<div class="signal-row">
       <div>
         <div class="signal-name">${s.ticker}</div>
-        <div style="margin-top:3px">${sources}</div>
+        ${name}
+        <div style="margin-top:2px;display:flex;gap:6px;flex-wrap:wrap">${sources} ${entryStr} ${erStr}</div>
       </div>
-      <span class="${chgCls}" style="font-size:10px">${chgStr}</span>
-      ${launchStr}
+      <span class="${chgCls}" style="font-size:10px;min-width:52px;text-align:right">${chgStr}</span>
       <div class="signal-score ${scoreCls}">${s.score}</div>
       <span class="signal-pill ${sigCls}">${s.signal}</span>
     </div>`;
