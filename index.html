@@ -859,8 +859,18 @@ function loadAdvice() {
         || data.signal || data.Signal || data.segnale
         || (score != null ? scoreToSignalLocal(score) : null);
 
-      // Score: preferisce quello dello scanner (più aggiornato)
-      const displayScore = scannerScore ?? score;
+      // Score: usa scanner solo se è scala 0-100 (non R2 > 100)
+      // e solo se è significativamente più alto dello score advice
+      let displayScore;
+      if (scannerScore != null && scannerScore <= 100 && scannerScore > (score ?? 0)) {
+        displayScore = scannerScore; // scanner 0-100 più alto
+      } else if (score != null && score > 0) {
+        displayScore = score; // advice score
+      } else if (scannerScore != null && scannerScore <= 100) {
+        displayScore = scannerScore; // scanner come fallback
+      } else {
+        displayScore = null; // R2 score > 100 non mostrare nel portafoglio
+      }
       const signalSource = scannerSignal ? scannerData.sources?.join('+') : 'Advice';
 
       // Change: cerca in vari campi
@@ -882,20 +892,20 @@ function loadAdvice() {
       } else if (signal === 'SELL') {
         alert = '⚠ Rivedi'; alertCls = 'alert-exit';
       } else {
-        // Nessun segnale esplicito — usa score come proxy
-        if (score == null || score === 0) {
+        // Nessun segnale — usa displayScore come proxy
+        if (displayScore == null || displayScore === 0) {
           alert = '— Non scansionato'; alertCls = 'alert-warn';
-        } else if (score >= 65) {
+        } else if (displayScore >= 65) {
           alert = '✓ Positivo'; alertCls = 'alert-ok';
-        } else if (score >= 42) {
+        } else if (displayScore >= 42) {
           alert = '○ Neutro'; alertCls = 'alert-warn';
         } else {
           alert = '⚠ Basso'; alertCls = 'alert-exit';
         }
       }
 
-      const scoreDisp = displayScore != null ? Math.round(displayScore) : '—';
-      const scoreColor = displayScore == null ? 'var(--text3)' : displayScore >= 65 ? 'var(--bull)' : displayScore >= 42 ? 'var(--accent)' : 'var(--bear)';
+      const scoreDisp = displayScore != null && displayScore > 0 ? Math.round(displayScore) : '—';
+      const scoreColor = !displayScore ? 'var(--text3)' : displayScore >= 65 ? 'var(--bull)' : displayScore >= 42 ? 'var(--accent)' : 'var(--bear)';
 
       // Nome leggibile
       const rawName = data.name || data.display || data.Name || '';
