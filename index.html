@@ -581,10 +581,11 @@ function parseSource(source, raw) {
         else if (stato.includes('EARLY') || stato.includes('WATCH') || stato.includes('ATTENZIONE')) signal = 'HOLD';
         else if (stato.includes('GRIGIO') || stato.includes('STOP') || stato.includes('USCITA') || stato.includes('ROSSO')) signal = 'SELL';
         else signal = scoreToSignalLocal(score);
-        // Change: usa perfSett — è in formato decimale (0.0266 = +2.66%)
-        // se |val| < 2 assumiamo formato decimale e moltiplichiamo *100
-        let rawChg = v.perfSett ?? v.perfMese ?? v.change ?? null;
-        if (rawChg != null && Math.abs(rawChg) < 2) rawChg = rawChg * 100;
+        // Change: cerca in tutti i campi possibili di RAPTOR Two
+        // perfSett può essere decimale (0.0266=+2.66%) o percentuale (2.66)
+        let rawChg = v.perfSett ?? v['Sett%'] ?? v.sett ?? v.perfMese ?? v['Mese%'] ?? v.change ?? v.chg ?? null;
+        // Se decimale puro (|val| < 2 e non intero zero) → *100
+        if (rawChg != null && rawChg !== 0 && Math.abs(rawChg) < 2) rawChg = rawChg * 100;
         const change = rawChg;
         // entryDate: data inizio trend
         const entryDate = v.entryDate || null;
@@ -592,6 +593,10 @@ function parseSource(source, raw) {
         const er = v.er ?? null;
         const name = v.nome || v.display || ticker;
         result[ticker] = { ticker, score, signal, change, launchScore: null, entryDate, er, name, stato: v.stato };
+        // Debug first BUY
+        if (signal === 'BUY' && Object.keys(result).length === 1) {
+          console.log('[R2 first BUY]', ticker, {score, signal, change, entryDate, er, rawPerfSett: v.perfSett, allKeys: Object.keys(v)});
+        }
       }
     }
 
@@ -869,10 +874,13 @@ function loadAdvice() {
 
       // Nome leggibile
       const rawName = data.name || data.display || data.Name || '';
-      // Mostra il nome solo se è diverso dal ticker e non è solo il ticker senza estensione
+      // Non mostrare se è uguale al ticker o al ticker senza estensione
       const tickerBase = ticker.split('.')[0].toUpperCase();
-      const nameClean = rawName.toUpperCase().replace(/[.\-]/g,'');
-      const showName = rawName && rawName !== ticker && nameClean !== tickerBase && rawName.length > 1;
+      const rawUp = rawName.toUpperCase().replace(/\.MI$|\.DE$|\.PA$|\.L$|\.SW$/,'').trim();
+      const showName = rawName.length > 1
+        && rawName.toUpperCase() !== ticker.toUpperCase()
+        && rawUp !== tickerBase
+        && !ticker.toUpperCase().startsWith(rawUp);
       const name = showName ? rawName : '';
 
       return `<div class="portfolio-row">
