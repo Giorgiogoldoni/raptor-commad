@@ -678,6 +678,9 @@ function loadLocalSignals() {
   }
 
   // Sort by score desc, take top 20
+  // Esponi globalmente per uso del portafoglio
+  window._raptorSignalMap = tickerMap;
+
   // Priorità: BUY prima, poi ordina per score desc
   const sorted = Object.values(tickerMap)
     .filter(s => s.signal === 'BUY' || s.signal === 'HOLD')
@@ -738,7 +741,10 @@ function loadLocalSignals() {
 
   document.getElementById('signals-list').innerHTML = sorted.map(s => {
     const sigCls = s.signal === 'BUY' ? 'pill-buy' : s.signal === 'SELL' ? 'pill-sell' : s.signal === 'HOLD' ? 'pill-hold' : 'pill-na';
-    const scoreCls = s.score >= 65 ? 'pos' : s.score >= 42 ? 'neu' : 'neg';
+    // Score R2 > 100 = scala proprietaria RAPTOR Two (rank inverso * ER)
+    const isR2Score = s.score > 100;
+    const scoreCls = isR2Score ? '' : s.score >= 65 ? 'pos' : s.score >= 42 ? 'neu' : 'neg';
+    const scoreColor = isR2Score ? 'var(--orange)' : s.score >= 65 ? 'var(--bull)' : s.score >= 42 ? 'var(--accent)' : 'var(--bear)';
     const chgRaw = s.change;
     const chgStr = chgRaw != null ? (chgRaw >= 0 ? '+' : '') + Number(chgRaw).toFixed(2) + '%' : '—';
     const chgCls = chgRaw == null ? 'neu' : chgRaw >= 0 ? 'pos' : 'neg';
@@ -755,7 +761,7 @@ function loadLocalSignals() {
         <div style="margin-top:2px;display:flex;gap:6px;flex-wrap:wrap">${sources} ${entryStr} ${erStr}</div>
       </div>
       <span class="${chgCls}" style="font-size:10px;min-width:52px;text-align:right">${chgStr}</span>
-      <div class="signal-score ${scoreCls}">${s.score}</div>
+      <div class="signal-score" style="color:${scoreColor}" title="${isR2Score ? 'Score proprietario RAPTOR Two' : 'Score 0-100'}">${s.score}${isR2Score ? '<span style="font-size:8px;opacity:.6"> R2</span>' : ''}</div>
       <span class="signal-pill ${sigCls}">${s.signal}</span>
     </div>`;
   }).join('');
@@ -839,9 +845,23 @@ function loadAdvice() {
       // Score: cerca in tutti i campi possibili
       const rawScore = data.totalScore ?? data.score ?? data.Score ?? data.techScore ?? data.punteggio ?? null;
       const score = rawScore != null ? normalizeScore(rawScore) : null;
-      // Signal: usa direttamente quello salvato se disponibile
-      const signal = data.signal || data.Signal || data.segnale ||
-        (score != null ? scoreToSignalLocal(score) : null);
+
+      // Cross-reference: cerca il segnale nei RAPTOR scanner
+      // Prova ticker con e senza estensione (es. BENE.MI → BENE.MI o BENE)
+      const scannerData = window._raptorSignalMap?.[ticker]
+        || window._raptorSignalMap?.[ticker.split('.')[0]]
+        || null;
+      const scannerSignal = scannerData?.signal ?? null;
+      const scannerScore = scannerData?.score ?? null;
+
+      // Usa segnale scanner se disponibile, altrimenti quello salvato nel portafoglio
+      const signal = scannerSignal
+        || data.signal || data.Signal || data.segnale
+        || (score != null ? scoreToSignalLocal(score) : null);
+
+      // Score: preferisce quello dello scanner (più aggiornato)
+      const displayScore = scannerScore ?? score;
+      const signalSource = scannerSignal ? scannerData.sources?.join('+') : 'Advice';
 
       // Change: cerca in vari campi
       const chgRaw = data.change ?? data.chg ?? data['Sett%'] ?? data.sett ?? data['Mese%'] ?? null;
@@ -874,8 +894,8 @@ function loadAdvice() {
         }
       }
 
-      const scoreDisp = score != null ? score : '—';
-      const scoreColor = score == null ? 'var(--text3)' : score >= 65 ? 'var(--bull)' : score >= 42 ? 'var(--accent)' : 'var(--bear)';
+      const scoreDisp = displayScore != null ? Math.round(displayScore) : '—';
+      const scoreColor = displayScore == null ? 'var(--text3)' : displayScore >= 65 ? 'var(--bull)' : displayScore >= 42 ? 'var(--accent)' : 'var(--bear)';
 
       // Nome leggibile
       const rawName = data.name || data.display || data.Name || '';
@@ -888,9 +908,12 @@ function loadAdvice() {
         && !ticker.toUpperCase().startsWith(rawUp);
       const name = showName ? rawName : '';
 
+      const sourceLabel = scannerSignal
+        ? `<span style="font-size:9px;color:var(--blue);margin-left:4px">${signalSource}</span>`
+        : '';
       return `<div class="portfolio-row">
         <div>
-          <div style="font-weight:600;font-size:11px">${ticker}</div>
+          <div style="font-weight:600;font-size:11px">${ticker} ${sourceLabel}</div>
           ${showName ? `<div style="font-size:9px;color:var(--text3);margin-top:1px">${name}</div>` : ''}
           <div class="${chgCls}" style="font-size:10px">${chgStr}</div>
         </div>
@@ -907,7 +930,9 @@ function loadAdvice() {
 async function loadAll() {
   document.getElementById('update-badge').textContent = 'Caricamento...';
   await loadRSE();
+  // Prima carica i segnali scanner (costruisce tickerSignalMap)
   loadLocalSignals();
+  // Poi carica portafoglio (usa tickerSignalMap per gli alert)
   loadAdvice();
 }
 
