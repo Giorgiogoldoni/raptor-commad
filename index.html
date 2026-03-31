@@ -560,6 +560,7 @@ function parseSource(source, raw) {
         const score = normalizeScore(v.totalScore ?? v.score ?? v.techScore ?? v.Score ?? 0);
         if (score === 0 && !v.signal && !v.Signal && !v.stato) continue;
         const signal = v.signal || v.Signal || scoreToSignalLocal(score);
+        // perfSett già in % come R2
         const change = v.change ?? v.chg ?? v.perfSett ?? null;
         const name = v.nome || v.name || v.display || ticker;
         result[ticker] = { ticker, score, signal, change, launchScore: v.launchScore ?? null, name };
@@ -572,21 +573,25 @@ function parseSource(source, raw) {
       for (const v of data) {
         const ticker = v.ticker || v.display || v.Ticker;
         if (!ticker) continue;
-        // score è già 0-100
-        const score = v.score ?? v.Score ?? 0;
-        // stato → converti in BUY/HOLD/SELL
-        const stato = (v.stato || v.uscita || '').toString().toUpperCase();
+        // score: usalo direttamente (es. 22.2, 94...)
+        const score = Math.round(v.score ?? v.Score ?? 0);
+        // Controlla prima uscita — ha priorità su stato
+        const uscitaStr = (v.uscita || '').toString().toUpperCase();
+        const statoStr = (v.stato || '').toString().toUpperCase();
         let signal;
-        if (stato.includes('VERDE') || stato.includes('LONG CONF') || stato.includes('LONG_CONF')) signal = 'BUY';
-        else if (stato.includes('EARLY') || stato.includes('WATCH') || stato.includes('ATTENZIONE')) signal = 'HOLD';
-        else if (stato.includes('GRIGIO') || stato.includes('STOP') || stato.includes('USCITA') || stato.includes('ROSSO')) signal = 'SELL';
-        else signal = scoreToSignalLocal(score);
-        // Change: cerca in tutti i campi possibili di RAPTOR Two
-        // perfSett può essere decimale (0.0266=+2.66%) o percentuale (2.66)
-        let rawChg = v.perfSett ?? v['Sett%'] ?? v.sett ?? v.perfMese ?? v['Mese%'] ?? v.change ?? v.chg ?? null;
-        // Se decimale puro (|val| < 2 e non intero zero) → *100
-        if (rawChg != null && rawChg !== 0 && Math.abs(rawChg) < 2) rawChg = rawChg * 100;
-        const change = rawChg;
+        if (uscitaStr.includes('USCITA') || uscitaStr.includes('STOP')) {
+          signal = 'SELL'; // In uscita → SELL sempre
+        } else if (statoStr.includes('VERDE') || statoStr.includes('LONG CONF') || statoStr.includes('LONG_CONF')) {
+          signal = 'BUY';
+        } else if (statoStr.includes('EARLY') || statoStr.includes('WATCH') || statoStr.includes('ATTENZIONE')) {
+          signal = 'HOLD';
+        } else if (statoStr.includes('GRIGIO') || statoStr.includes('STOP') || statoStr.includes('ROSSO')) {
+          signal = 'SELL';
+        } else {
+          signal = scoreToSignalLocal(score);
+        }
+        // perfSett è già in % (es. 1.19 = +1.19%)
+        const change = v.perfSett ?? v.perfMese ?? v.change ?? null;
         // entryDate: data inizio trend
         const entryDate = v.entryDate || null;
         // er: Efficiency Ratio — utile come proxy del momentum
