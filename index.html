@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAPTOR — COMMAND CENTER</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface2: #f7f8fc;
+  --surface3: #eef0f6;
+  --border: #dde2ee;
+  --accent: #b8860b;
+  --bull: #1a9e63;
+  --bear: #d63040;
+  --neutral: #5a6e88;
+  --text: #1a2236;
+  --text2: #4a5a72;
+  --text3: #8a9ab4;
+  --blue: #2678c8;
+  --rc: #5a6e88;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* TOPBAR */
+#topbar {
+  display: flex; align-items: center; gap: 12px; padding: 0 20px; height: 50px;
+  background: #fff; border-bottom: 2px solid var(--accent);
+  position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.logo { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 20px; letter-spacing: 5px; color: var(--accent); }
+.logo span { color: var(--text3); font-size: 9px; letter-spacing: 2px; margin-left: 8px; vertical-align: middle; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+#update-badge { font-size: 10px; color: var(--text3); white-space: nowrap; }
+.tb-btn {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text2); padding: 4px 11px; cursor: pointer; font-family: inherit;
+  font-size: 10px; letter-spacing: 1px; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 5px; transition: all .2s;
+}
+.tb-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* MAIN LAYOUT */
+.page { max-width: 1280px; margin: 0 auto; padding: 18px 20px 40px; display: flex; flex-direction: column; gap: 14px; }
+
+/* REGIME BANNER */
+#regime-banner {
+  border-radius: 8px; padding: 18px 22px;
+  border: 2px solid var(--rc);
+  background: #fff;
+  display: grid; grid-template-columns: auto 1fr auto; gap: 24px; align-items: start;
+}
+.regime-left { min-width: 180px; }
+.regime-eyebrow { font-size: 9px; letter-spacing: 2px; color: var(--text3); text-transform: uppercase; margin-bottom: 4px; }
+.regime-name { font-family: 'Rajdhani', sans-serif; font-size: 40px; font-weight: 700; color: var(--rc); line-height: 1; }
+.regime-score-line { font-size: 11px; color: var(--rc); font-weight: 600; margin-top: 4px; }
+.regime-since { font-size: 10px; color: var(--text3); margin-top: 6px; }
+.regime-since strong { color: var(--text2); }
+.regime-signals { display: flex; flex-direction: column; gap: 7px; padding-top: 4px; }
+.regime-signal { font-size: 11px; color: var(--text2); display: flex; align-items: flex-start; gap: 7px; }
+.regime-signal-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--rc); flex-shrink: 0; margin-top: 3px; }
+.regime-right { display: flex; flex-direction: column; gap: 8px; min-width: 200px; }
+.regime-action {
+  border-radius: 5px; padding: 8px 12px;
+  border: 1px solid; font-size: 11px; font-weight: 600;
+}
+.regime-action .ra-label { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; opacity: .7; margin-bottom: 2px; }
+.regime-action.bull { background: rgba(26,158,99,0.06); border-color: rgba(26,158,99,0.25); color: var(--bull); }
+.regime-action.bear { background: rgba(214,48,64,0.06); border-color: rgba(214,48,64,0.25); color: var(--bear); }
+.regime-action.neu { background: var(--surface2); border-color: var(--border); color: var(--neutral); }
+.regime-action.warn { background: rgba(224,123,0,0.06); border-color: rgba(224,123,0,0.25); color: var(--accent); }
+
+/* CARDS ROW */
+.cards-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.kpi-card { background: #fff; border: 1px solid var(--border); border-radius: 7px; padding: 12px 14px; }
+.kpi-cat { font-size: 9px; letter-spacing: 1px; color: var(--text3); text-transform: uppercase; margin-bottom: 3px; }
+.kpi-name { font-size: 10px; color: var(--text2); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi-price { font-family: 'Rajdhani', sans-serif; font-size: 20px; font-weight: 700; }
+.kpi-chg { font-size: 10px; margin-top: 2px; display: flex; gap: 8px; }
+.kpi-chg span { font-size: 9px; color: var(--text3); }
+.kpi-sma { font-size: 9px; color: var(--text3); margin-top: 3px; }
+.kpi-trend { font-size: 9px; margin-top: 3px; font-weight: 600; }
+.pos { color: var(--bull); } .neg { color: var(--bear); } .neu { color: var(--neutral); }
+
+/* TWO COL */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+@media (max-width: 960px) { .two-col, .three-col { grid-template-columns: 1fr; } #regime-banner { grid-template-columns: 1fr; } }
+
+/* SECTION */
+.section { background: #fff; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.section-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+.section-title { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 2px; color: var(--accent); text-transform: uppercase; }
+.section-sub { font-size: 10px; color: var(--text3); }
+.section-body { padding: 12px 14px; }
+
+/* PROB LIST */
+.prob-list { display: flex; flex-direction: column; gap: 5px; max-height: 280px; overflow-y: auto; }
+.prob-row { display: flex; align-items: center; gap: 8px; }
+.prob-name { font-size: 10px; color: var(--text2); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prob-bar-wrap { width: 80px; height: 5px; background: var(--surface3); border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+.prob-fill { height: 100%; border-radius: 3px; }
+.prob-val { font-size: 10px; font-weight: 700; min-width: 30px; text-align: right; }
+
+/* ALLOCATION TABLE */
+.alloc-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.alloc-table th { text-align: left; padding: 6px 8px; color: var(--text3); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid var(--border); font-weight: 700; background: var(--surface2); }
+.alloc-table td { padding: 7px 8px; border-bottom: 1px solid var(--surface3); }
+.alloc-table tr:last-child td { border-bottom: none; }
+.alloc-table tr:hover td { background: var(--surface2); }
+.alloc-bar-wrap { width: 80px; height: 5px; background: var(--surface3); border-radius: 3px; overflow: hidden; }
+.alloc-bar-fill { height: 100%; border-radius: 3px; }
+.badge-source { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: 700; background: var(--surface3); color: var(--text2); }
+.badge-one { background: rgba(38,120,200,0.1); color: var(--blue); }
+.badge-two { background: rgba(112,80,200,0.1); color: var(--purple); }
+.badge-leva { background: rgba(214,48,64,0.1); color: var(--bear); }
+.badge-stoxx { background: rgba(26,158,99,0.1); color: var(--bull); }
+.badge-advice { background: rgba(184,134,11,0.1); color: var(--accent); }
+
+/* TOP SIGNALS */
+.signals-list { display: flex; flex-direction: column; gap: 6px; }
+.signal-row {
+  display: grid; grid-template-columns: 1fr auto auto auto auto;
+  align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 5px; border: 1px solid var(--border);
+  cursor: pointer; transition: background .1s;
+}
+.signal-row:hover { background: var(--surface2); }
+.signal-name { font-weight: 600; font-size: 11px; }
+.signal-ticker { font-size: 10px; color: var(--text3); margin-top: 1px; }
+.signal-score { font-family: 'Rajdhani', sans-serif; font-size: 18px; font-weight: 700; }
+.signal-pill { padding: 2px 7px; border-radius: 10px; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.pill-buy { background: rgba(26,158,99,0.12); color: var(--bull); border: 1px solid rgba(26,158,99,0.3); }
+.pill-hold { background: rgba(90,110,136,0.1); color: var(--neutral); border: 1px solid rgba(90,110,136,0.2); }
+.pill-sell { background: rgba(214,48,64,0.12); color: var(--bear); border: 1px solid rgba(214,48,64,0.3); }
+.pill-na { background: var(--surface3); color: var(--text3); border: 1px solid var(--border); }
+.signal-launch { font-size: 10px; font-weight: 700; color: var(--accent); }
+
+/* PORTAFOGLIO REALE */
+.portfolio-row {
+  display: grid; grid-template-columns: 1fr auto auto auto;
+  align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: 5px; border: 1px solid var(--border); margin-bottom: 5px;
+}
+.portfolio-row:last-child { margin-bottom: 0; }
+.portfolio-alert { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
+.alert-ok { background: rgba(26,158,99,0.1); color: var(--bull); }
+.alert-warn { background: rgba(184,134,11,0.1); color: var(--accent); }
+.alert-exit { background: rgba(214,48,64,0.1); color: var(--bear); }
+
+/* EMPTY STATE */
+.empty { padding: 24px; text-align: center; color: var(--text3); font-size: 11px; }
+.empty .big { font-size: 28px; margin-bottom: 6px; }
+
+/* LOADING */
+.loading-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* DISCLAIMER */
+.disclaimer { font-size: 10px; color: var(--text3); line-height: 1.6; padding: 10px 14px; border-top: 1px solid var(--border); }
+
+/* OVERRIDE REGIME COLORS */
+.regime-bull { --rc: #1a9e63; }
+.regime-early-bull { --rc: #2678c8; }
+.regime-neutro { --rc: #5a6e88; }
+.regime-early-bear { --rc: #e07b00; }
+.regime-bear { --rc: #d63040; }
+.regime-crisis { --rc: #9b1c2e; }
+</style>
+</head>
+<body>
+
+<header id="topbar">
+  <div class="logo">RAPTOR <span>COMMAND CENTER</span></div>
+  <div class="topbar-right">
+    <span id="update-badge">Caricamento...</span>
+    <button class="tb-btn" onclick="loadAll()">🔄 Aggiorna</button>
+    <a class="tb-btn" href="https://giorgiogoldoni.github.io/raptor-wealth-meridian/" target="_blank">🏠 Master Suite</a>
+    <a class="tb-btn" href="https://giorgiogoldoni.github.io/RAPTOR_SCENARIO_ENGINE/" target="_blank">🧠 Scenario Engine</a>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- REGIME BANNER -->
+  <div id="regime-banner" class="regime-neutro">
+    <div class="regime-left">
+      <div class="regime-eyebrow">Regime di Mercato</div>
+      <div class="regime-name" id="regime-name"><span class="loading-spinner"></span></div>
+      <div class="regime-score-line" id="regime-score"></div>
+      <div class="regime-since" id="regime-since"></div>
+    </div>
+    <div class="regime-signals" id="regime-signals">
+      <div style="color:var(--text3);font-size:11px;">Caricamento segnali...</div>
+    </div>
+    <div class="regime-right" id="regime-actions"></div>
+  </div>
+
+  <!-- MACRO INDICATORI -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-title">📊 Indicatori Macro</span>
+      <span class="section-sub" id="macro-updated"></span>
+    </div>
+    <div class="section-body">
+      <div class="cards-row" id="macro-cards">
+        <div class="empty"><div class="loading-spinner"></div> Caricamento...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="two-col">
+
+    <!-- SCENARI PROBABILISTICI -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">🎲 Scenari &amp; Probabilità</span>
+        <span class="section-sub">Top 15 per rilevanza</span>
+      </div>
+      <div class="section-body">
+        <div class="prob-list" id="prob-list">
+          <div class="empty"><div class="loading-spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALLOCAZIONE SUGGERITA -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">📐 Allocazione Suggerita</span>
+        <span class="section-sub" id="alloc-regime-label">Basata sul regime corrente</span>
+      </div>
+      <div class="section-body">
+        <table class="alloc-table" id="alloc-table">
+          <thead><tr><th>Categoria</th><th>Peso %</th><th>Note</th></tr></thead>
+          <tbody id="alloc-body">
+            <tr><td colspan="3"><div class="empty"><div class="loading-spinner"></div></div></td></tr>
+          </tbody>
+        </table>
+        <div id="alloc-since" style="font-size:10px;color:var(--text3);margin-top:8px;"></div>
+      </div>
+      <div class="disclaimer">⚠ Allocazione indicativa basata sul regime. Non è consulenza finanziaria.</div>
+    </div>
+
+  </div>
+
+  <div class="two-col">
+
+    <!-- TOP SEGNALI RAPTOR (da localStorage) -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">🦅 Top Segnali Suite</span>
+        <span class="section-sub" id="signals-meta">Da cache RAPTOR locale</span>
+      </div>
+      <div class="section-body">
+        <div class="signals-list" id="signals-list">
+          <div class="empty">
+            <div class="big">📡</div>
+            Apri almeno una pagina RAPTOR per popolare la cache locale, poi torna qui.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PORTAFOGLIO REALE (Raptor Advice) -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">💼 Portafoglio Reale</span>
+        <span class="section-sub">Da Raptor Advice — alert di regime</span>
+      </div>
+      <div class="section-body" id="advice-body">
+        <div class="empty">
+          <div class="big">💼</div>
+          Apri Raptor Advice per sincronizzare il portafoglio reale.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SOVRAPPOSIZIONI -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-title">🔗 Consenso Multi-RAPTOR</span>
+      <span class="section-sub">Titoli presenti in più sorgenti — segnale rinforzato</span>
+    </div>
+    <div class="section-body" id="overlap-body">
+      <div class="empty">Apri le pagine RAPTOR per rilevare le sovrapposizioni.</div>
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════
+const RSE_JSON = 'https://giorgiogoldoni.github.io/RAPTOR_SCENARIO_ENGINE/data/market_data_rse.json';
+
+// Chiavi localStorage usate da ciascun RAPTOR
+const LS_SOURCES = {
+  'RAPTOR One':   'raptor_cache_v2',
+  'RAPTOR Two':   'raptor_two_cache_v1',
+  'ETF Leva':     'raptor_leva_cache_v1',
+  'STOXX 600':    'raptor_stoxx_v3',
+  'Advice':       'raptor_advice_v1',
+};
+
+// Colori badge per sorgente
+const SOURCE_BADGE = {
+  'RAPTOR One':  'badge-one',
+  'RAPTOR Two':  'badge-two',
+  'ETF Leva':    'badge-leva',
+  'STOXX 600':   'badge-stoxx',
+  'Advice':      'badge-advice',
+};
+
+// ═══════════════════════════════════════════════════════════
+// REGIME ENGINE
+// ═══════════════════════════════════════════════════════════
+const REGIME_CONFIG = {
+  'BULL':       { cls:'regime-bull',       color:'#1a9e63', label:'Mercato in salute', actions:[{type:'bull',label:'POSIZIONAMENTO',text:'Massimizza esposizione azionaria. Priorità a BUY su tutti i RAPTOR.'},{type:'bull',label:'LEVA',text:'Leva 3 operative se segnale forte. Stop stretti.'},{type:'neu',label:'DIFENSIVI',text:'Riduci quota monetario al minimo necessario.'}] },
+  'EARLY BULL': { cls:'regime-early-bull', color:'#2678c8', label:'Ripresa in corso',  actions:[{type:'bull',label:'STRATEGIA',text:'Entra gradualmente sui migliori BUY. Privilegia qualità e liquidità.'},{type:'warn',label:'LEVA',text:'Leva solo su conferma forte. Dimensione ridotta.'},{type:'neu',label:'MONETARIO',text:'Mantieni 15-20% XEON come cuscinetto.'}] },
+  'NEUTRO':     { cls:'regime-neutro',     color:'#5a6e88', label:'Segnali misti',     actions:[{type:'neu',label:'STRATEGIA',text:'Mantieni posizioni esistenti buone. Non aprire nuove senza conferma.'},{type:'warn',label:'LEVA',text:'Leva sospesa. Troppo rumore per operare.'},{type:'neu',label:'MONETARIO',text:'25-30% XEON. Aspetta chiarezza direzionale.'}] },
+  'EARLY BEAR': { cls:'regime-early-bear', color:'#e07b00', label:'Deterioramento',   actions:[{type:'warn',label:'STRATEGIA',text:'Alleggerisci le posizioni più deboli (SELL o HOLD basso).'},{type:'bear',label:'LEVA',text:'Chiudi tutte le posizioni leva. Nessuna nuova apertura.'},{type:'warn',label:'MONETARIO',text:'Aumenta XEON al 40-50%. Proteggi il capitale.'}] },
+  'BEAR':       { cls:'regime-bear',       color:'#d63040', label:'Mercato in calo',   actions:[{type:'bear',label:'STRATEGIA',text:'Riduci drasticamente. Solo difensivi e dividendi stabili.'},{type:'bear',label:'LEVA',text:'Leva completamente chiusa. Nessuna eccezione.'},{type:'bear',label:'MONETARIO',text:'60-70% XEON. Preserva il capitale.'}] },
+  'CRISIS':     { cls:'regime-crisis',     color:'#9b1c2e', label:'Crisi di mercato', actions:[{type:'bear',label:'STRATEGIA',text:'Uscita quasi totale. Solo oro e monetario.'},{type:'bear',label:'LEVA',text:'Leva chiusa. Assolutamente nessuna apertura.'},{type:'bear',label:'MONETARIO',text:'80-100% XEON/Oro. Massima protezione.'}] },
+};
+
+const ALLOC_BY_REGIME = {
+  'BULL':       [{cat:'Azionario Growth',pct:45,color:'#1a9e63',note:'RAPTOR One + Stoxx 600 BUY'},{cat:'Azionario Dividend',pct:20,color:'#2678c8',note:'RAPTOR Two — qualità'},{cat:'ETF Leva',pct:10,color:'#d63040',note:'Solo segnali forti'},{cat:'Obbligazionario',pct:15,color:'#7050c8',note:'Breve durata'},{cat:'Monetario (XEON)',pct:10,color:'#5a6e88',note:'Cuscinetto minimo'}],
+  'EARLY BULL': [{cat:'Azionario Growth',pct:30,color:'#1a9e63',note:'Entrata graduale'},{cat:'Azionario Dividend',pct:25,color:'#2678c8',note:'Priorità difensivi'},{cat:'ETF Leva',pct:5,color:'#d63040',note:'Dimensione ridotta'},{cat:'Obbligazionario',pct:20,color:'#7050c8',note:'Investment grade'},{cat:'Monetario (XEON)',pct:20,color:'#5a6e88',note:'Cuscinetto attivo'}],
+  'NEUTRO':     [{cat:'Azionario Growth',pct:20,color:'#1a9e63',note:'Solo best-in-class'},{cat:'Azionario Dividend',pct:25,color:'#2678c8',note:'Stabile e difensivo'},{cat:'ETF Leva',pct:0,color:'#d63040',note:'Sospeso'},{cat:'Obbligazionario',pct:25,color:'#7050c8',note:'Misto durata'},{cat:'Monetario (XEON)',pct:30,color:'#5a6e88',note:'Attendi chiarezza'}],
+  'EARLY BEAR': [{cat:'Azionario Growth',pct:10,color:'#1a9e63',note:'Solo posizioni robuste'},{cat:'Azionario Dividend',pct:15,color:'#2678c8',note:'Riduzione in corso'},{cat:'ETF Leva',pct:0,color:'#d63040',note:'Chiuso'},{cat:'Obbligazionario',pct:30,color:'#7050c8',note:'Govt bond qualità'},{cat:'Monetario (XEON)',pct:45,color:'#5a6e88',note:'Protezione prioritaria'}],
+  'BEAR':       [{cat:'Azionario',pct:10,color:'#1a9e63',note:'Solo difensivi stabili'},{cat:'Oro',pct:15,color:'#b8860b',note:'Hedge geopolitico'},{cat:'ETF Leva',pct:0,color:'#d63040',note:'Chiuso'},{cat:'Obbligazionario',pct:30,color:'#7050c8',note:'Govt bond core'},{cat:'Monetario (XEON)',pct:45,color:'#5a6e88',note:'Capitale al sicuro'}],
+  'CRISIS':     [{cat:'Azionario',pct:5,color:'#1a9e63',note:'Solo oro miners'},{cat:'Oro',pct:20,color:'#b8860b',note:'Massima protezione'},{cat:'ETF Leva',pct:0,color:'#d63040',note:'Chiuso'},{cat:'Obbligazionario',pct:0,color:'#7050c8',note:'Evita duration'},{cat:'Monetario (XEON)',pct:75,color:'#5a6e88',note:'Preserva il capitale'}],
+};
+
+// ═══════════════════════════════════════════════════════════
+// LOAD RSE JSON
+// ═══════════════════════════════════════════════════════════
+let rseData = null;
+let regimeSince = null; // calcolato euristicamente
+
+async function loadRSE() {
+  try {
+    const r = await fetch(RSE_JSON + '?t=' + Date.now(), { signal: AbortSignal.timeout(10000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    rseData = await r.json();
+    renderRegime();
+    renderMacro();
+    renderProb();
+    renderAlloc();
+    document.getElementById('update-badge').textContent = 'Aggiornato: ' + (rseData.meta?.updated_it || '—');
+  } catch(e) {
+    document.getElementById('regime-name').innerHTML = '<span style="font-size:14px;color:var(--text3)">Impossibile caricare dati RSE</span>';
+    document.getElementById('update-badge').textContent = 'Errore caricamento';
+    console.error('[RSE]', e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER REGIME
+// ═══════════════════════════════════════════════════════════
+function renderRegime() {
+  const meta = rseData?.meta || {};
+  const regime = meta.regime || 'NEUTRO';
+  const cfg = REGIME_CONFIG[regime] || REGIME_CONFIG['NEUTRO'];
+  const score = meta.regime_score ?? 0;
+  const signals = meta.regime_signals || [];
+
+  // Apply class
+  const banner = document.getElementById('regime-banner');
+  banner.className = cfg.cls;
+
+  document.getElementById('regime-name').textContent = regime;
+  document.getElementById('regime-score').textContent = cfg.label + (score !== 0 ? ' (score ' + (score > 0 ? '+' : '') + score + ')' : '');
+
+  // Calcola "in regime dal" — leggiamo dall'indicatore più significativo
+  // Usiamo la data aggiornamento come proxy dell'inizio del regime
+  const updDate = meta.updated ? new Date(meta.updated) : null;
+  if (updDate) {
+    // Stima inizio regime: se score è basso/alto, assumiamo ~2-4 settimane
+    const daysOffset = Math.abs(score) > 3 ? 7 : Math.abs(score) > 1 ? 14 : 21;
+    const sinceDate = new Date(updDate.getTime() - daysOffset * 86400000);
+    document.getElementById('regime-since').innerHTML =
+      '<strong>Regime attivo da:</strong> ~' + sinceDate.toLocaleDateString('it-IT', {day:'2-digit', month:'long', year:'numeric'});
+  }
+
+  // Signals
+  document.getElementById('regime-signals').innerHTML = signals.map(s =>
+    `<div class="regime-signal"><div class="regime-signal-dot"></div><span>${s}</span></div>`
+  ).join('') || '<div style="color:var(--text3);font-size:11px;">Nessun segnale disponibile</div>';
+
+  // Actions
+  document.getElementById('regime-actions').innerHTML = cfg.actions.map(a =>
+    `<div class="regime-action ${a.type}"><div class="ra-label">${a.label}</div>${a.text}</div>`
+  ).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER MACRO
+// ═══════════════════════════════════════════════════════════
+const CAT_LABELS = { risk:'Volatilità', rates:'Tassi', commodity:'Commodity', fx:'Valute', equity:'Equity', crypto:'Crypto', credit:'Credito' };
+const CAT_ORDER = ['equity','risk','commodity','rates','fx','crypto','credit'];
+
+function renderMacro() {
+  const inds = rseData?.indicators || {};
+  document.getElementById('macro-updated').textContent = rseData?.meta?.updated_it || '';
+
+  // Sort by category order
+  const items = Object.entries(inds)
+    .filter(([,v]) => v.ok)
+    .sort((a,b) => {
+      const oa = CAT_ORDER.indexOf(a[1].cat), ob = CAT_ORDER.indexOf(b[1].cat);
+      return (oa < 0 ? 99 : oa) - (ob < 0 ? 99 : ob);
+    });
+
+  if (!items.length) {
+    document.getElementById('macro-cards').innerHTML = '<div class="empty">Nessun dato disponibile</div>';
+    return;
+  }
+
+  document.getElementById('macro-cards').innerHTML = items.map(([key, v]) => {
+    const wChg = v.chg_week, mChg = v.chg_month;
+    const wCls = wChg > 0 ? 'pos' : wChg < 0 ? 'neg' : 'neu';
+    const mCls = mChg > 0 ? 'pos' : mChg < 0 ? 'neg' : 'neu';
+    const price = v.price > 1000 ? v.price.toLocaleString('it-IT', {maximumFractionDigits:0}) : v.price?.toFixed(v.price > 10 ? 2 : 4);
+    const vsMA = v.sma20 ? ((v.price - v.sma20) / v.sma20 * 100) : null;
+    const maTrend = vsMA != null ? (vsMA > 0 ? '▲ sopra MA20' : '▼ sotto MA20') : '';
+    const maColor = vsMA != null ? (vsMA > 0 ? 'var(--bull)' : 'var(--bear)') : 'var(--text3)';
+    return `<div class="kpi-card">
+      <div class="kpi-cat">${CAT_LABELS[v.cat] || v.cat}</div>
+      <div class="kpi-name" title="${v.n}">${v.n}</div>
+      <div class="kpi-price ${mChg < -5 ? 'neg' : mChg > 5 ? 'pos' : ''}">${price}</div>
+      <div class="kpi-chg">
+        <span class="${wCls}">${wChg >= 0 ? '+' : ''}${wChg?.toFixed(1)}% <span>7gg</span></span>
+        <span class="${mCls}">${mChg >= 0 ? '+' : ''}${mChg?.toFixed(1)}% <span>30gg</span></span>
+      </div>
+      <div class="kpi-sma" style="color:${maColor}">${maTrend}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER PROBABILITIES
+// ═══════════════════════════════════════════════════════════
+const PROB_LABELS = {
+  petrolio_alto:'Petrolio alto',guerra_commerciale:'Guerra commerciale',crisi_taiwan:'Crisi Taiwan',hormuz:'Hormuz chiuso',
+  recessione_germania:'Recessione Germania',crisi_btp:'Crisi BTP',bce_alza:'BCE alza tassi',
+  hard_landing_usa:'Hard landing USA',soft_landing:'Soft landing USA',stagflazione_usa:'Stagflazione USA',
+  boom_ai:'Boom AI',flash_crash:'Flash crash',bear_market:'Bear market',bull_estremo:'Bull estremo',
+  superciclo_commodity:'Superciclo commodity',dollaro_debole:'Dollaro debole',
+  rivoluzione_farmaceutica:'Rivoluzione farmaceutica',robotica_automazione:'Robotica & Automazione',
+  infrastrutture_boom:'Boom infrastrutture',invecchiamento_europa:'Invecchiamento Europa',
+  bitcoin_mainstream:'Bitcoin mainstream',crisi_banche_usa:'Crisi banche USA',
+  rinascita_industriale_eu:'Rinascita industriale EU',lusso_italiano:'Lusso italiano',
+  pace_ucraina:'Pace Ucraina',multipolarismo:'Multipolarismo',
+  inflazione_strutturale:'Inflazione strutturale',repressione_finanziaria:'Repressione finanziaria',
+};
+
+function probColor(p) {
+  if (p >= 70) return 'var(--bear)';
+  if (p >= 50) return 'var(--accent)';
+  if (p >= 30) return 'var(--blue)';
+  return 'var(--text3)';
+}
+
+function renderProb() {
+  const probs = rseData?.probabilities || {};
+  if (!Object.keys(probs).length) {
+    document.getElementById('prob-list').innerHTML = '<div class="empty">Nessun dato</div>';
+    return;
+  }
+
+  // Sort by value desc, take top 15
+  const sorted = Object.entries(probs)
+    .sort((a,b) => b[1] - a[1])
+    .slice(0, 15);
+
+  document.getElementById('prob-list').innerHTML = sorted.map(([key, val]) => {
+    const color = probColor(val);
+    const label = PROB_LABELS[key] || key.replace(/_/g,' ');
+    return `<div class="prob-row">
+      <div class="prob-name" title="${label}">${label}</div>
+      <div class="prob-bar-wrap"><div class="prob-fill" style="width:${val}%;background:${color}"></div></div>
+      <div class="prob-val" style="color:${color}">${val}%</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER ALLOCATION
+// ═══════════════════════════════════════════════════════════
+function renderAlloc() {
+  const regime = rseData?.meta?.regime || 'NEUTRO';
+  const alloc = ALLOC_BY_REGIME[regime] || ALLOC_BY_REGIME['NEUTRO'];
+  document.getElementById('alloc-regime-label').textContent = 'Regime: ' + regime;
+
+  const updDate = rseData?.meta?.updated ? new Date(rseData.meta.updated) : null;
+  const daysOffset = Math.abs(rseData?.meta?.regime_score || 0) > 3 ? 7 : 14;
+  if (updDate) {
+    const sinceDate = new Date(updDate.getTime() - daysOffset * 86400000);
+    document.getElementById('alloc-since').textContent =
+      'Allocazione valida da: ~' + sinceDate.toLocaleDateString('it-IT', {day:'2-digit', month:'long', year:'numeric'});
+  }
+
+  document.getElementById('alloc-body').innerHTML = alloc.map(a => `
+    <tr>
+      <td style="font-weight:600">${a.cat}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-weight:700;color:${a.color};min-width:32px">${a.pct}%</span>
+          <div class="alloc-bar-wrap"><div class="alloc-bar-fill" style="width:${a.pct}%;background:${a.color}"></div></div>
+        </div>
+      </td>
+      <td style="color:var(--text2);font-size:10px">${a.note}</td>
+    </tr>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// LOAD LOCAL STORAGE — top signals
+// ═══════════════════════════════════════════════════════════
+function loadLocalSignals() {
+  const allSignals = [];
+  const tickerMap = {}; // ticker → {sources[], bestScore, bestSignal}
+
+  for (const [source, lsKey] of Object.entries(LS_SOURCES)) {
+    if (source === 'Advice') continue; // handled separately
+    try {
+      const raw = localStorage.getItem(lsKey);
+      if (!raw) continue;
+      const cache = JSON.parse(raw);
+      for (const [ticker, data] of Object.entries(cache)) {
+        if (!data.totalScore && !data.techScore) continue;
+        const score = data.totalScore ?? data.techScore ?? 0;
+        const signal = data.signal || 'N/A';
+        if (!tickerMap[ticker]) {
+          tickerMap[ticker] = {
+            ticker, score, signal, sources: [source],
+            change: data.change, launchScore: data.launchScore ?? null,
+            name: data.name || ticker
+          };
+        } else {
+          tickerMap[ticker].sources.push(source);
+          if (score > tickerMap[ticker].score) {
+            tickerMap[ticker].score = score;
+            tickerMap[ticker].signal = signal;
+          }
+        }
+      }
+    } catch(e) {}
+  }
+
+  // Sort by score desc, take top 20
+  const sorted = Object.values(tickerMap)
+    .filter(s => s.signal === 'BUY' || s.signal === 'HOLD')
+    .sort((a,b) => b.score - a.score)
+    .slice(0, 20);
+
+  if (!sorted.length) {
+    document.getElementById('signals-list').innerHTML = `
+      <div class="empty">
+        <div class="big">📡</div>
+        Apri almeno una pagina RAPTOR e avvia la scansione, poi torna qui.
+      </div>`;
+    document.getElementById('signals-meta').textContent = 'Cache locale vuota';
+    return;
+  }
+
+  const totalCached = Object.keys(tickerMap).length;
+  const buyCount = Object.values(tickerMap).filter(s => s.signal === 'BUY').length;
+  document.getElementById('signals-meta').textContent =
+    `${totalCached} titoli in cache · ${buyCount} BUY · Top 20`;
+
+  document.getElementById('signals-list').innerHTML = sorted.map(s => {
+    const sigCls = s.signal === 'BUY' ? 'pill-buy' : s.signal === 'SELL' ? 'pill-sell' : s.signal === 'HOLD' ? 'pill-hold' : 'pill-na';
+    const scoreCls = s.score >= 65 ? 'pos' : s.score >= 42 ? 'neu' : 'neg';
+    const chgStr = s.change != null ? (s.change >= 0 ? '+' : '') + s.change.toFixed(2) + '%' : '—';
+    const chgCls = s.change == null ? 'neu' : s.change >= 0 ? 'pos' : 'neg';
+    const sources = s.sources.map(src => `<span class="badge-source ${SOURCE_BADGE[src] || ''}">${src}</span>`).join(' ');
+    const launchStr = s.launchScore != null
+      ? `<span class="signal-launch">${s.launchScore >= 70 ? '🔥' : '📡'} ${s.launchScore}</span>`
+      : '<span style="color:var(--text3)">—</span>';
+    return `<div class="signal-row">
+      <div>
+        <div class="signal-name">${s.ticker}</div>
+        <div style="margin-top:3px">${sources}</div>
+      </div>
+      <span class="${chgCls}" style="font-size:10px">${chgStr}</span>
+      ${launchStr}
+      <div class="signal-score ${scoreCls}">${s.score}</div>
+      <span class="signal-pill ${sigCls}">${s.signal}</span>
+    </div>`;
+  }).join('');
+
+  // Render overlaps
+  renderOverlap(tickerMap);
+}
+
+// ═══════════════════════════════════════════════════════════
+// OVERLAP — titoli in più RAPTOR
+// ═══════════════════════════════════════════════════════════
+function renderOverlap(tickerMap) {
+  const multi = Object.values(tickerMap).filter(s => s.sources.length >= 2).sort((a,b) => b.sources.length - a.sources.length || b.score - a.score).slice(0, 12);
+  if (!multi.length) {
+    document.getElementById('overlap-body').innerHTML = '<div class="empty">Nessuna sovrapposizione rilevata. Scansiona più RAPTOR.</div>';
+    return;
+  }
+  document.getElementById('overlap-body').innerHTML = `
+    <table class="alloc-table">
+      <thead><tr><th>Ticker</th><th>Sorgenti</th><th>Score</th><th>Segnale</th><th>Consenso</th></tr></thead>
+      <tbody>${multi.map(s => {
+        const sigCls = s.signal === 'BUY' ? 'pill-buy' : s.signal === 'SELL' ? 'pill-sell' : 'pill-hold';
+        const scoreCls = s.score >= 65 ? 'pos' : s.score >= 42 ? 'neu' : 'neg';
+        const sources = s.sources.map(src => `<span class="badge-source ${SOURCE_BADGE[src] || ''}">${src}</span>`).join(' ');
+        const consensusColor = s.sources.length >= 3 ? 'var(--bull)' : s.sources.length >= 2 ? 'var(--accent)' : 'var(--text3)';
+        const consensusLabel = s.sources.length >= 3 ? '⬤⬤⬤ Forte' : '⬤⬤ Medio';
+        return `<tr>
+          <td><strong>${s.ticker}</strong></td>
+          <td>${sources}</td>
+          <td class="${scoreCls}" style="font-weight:700">${s.score}</td>
+          <td><span class="signal-pill ${sigCls}">${s.signal}</span></td>
+          <td style="color:${consensusColor};font-weight:700;font-size:10px">${consensusLabel}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// RAPTOR ADVICE — portafoglio reale
+// ═══════════════════════════════════════════════════════════
+function loadAdvice() {
+  const regime = rseData?.meta?.regime || 'NEUTRO';
+  try {
+    const raw = localStorage.getItem(LS_SOURCES['Advice']);
+    if (!raw) return;
+    const cache = JSON.parse(raw);
+    const items = Object.entries(cache);
+    if (!items.length) return;
+
+    document.getElementById('advice-body').innerHTML = items.map(([ticker, data]) => {
+      const score = data.totalScore ?? data.techScore ?? 0;
+      const signal = data.signal || 'N/A';
+      // Regime compatibility
+      let alert, alertCls;
+      if (regime === 'BEAR' || regime === 'CRISIS') {
+        alert = signal === 'SELL' ? '⚠ ESCI' : '⚠ Valuta uscita';
+        alertCls = 'alert-exit';
+      } else if (regime === 'EARLY BEAR') {
+        alert = signal === 'BUY' ? '✓ Tieni' : signal === 'HOLD' ? '⚡ Attenzione' : '⚠ Alleggerisci';
+        alertCls = signal === 'BUY' ? 'alert-ok' : signal === 'HOLD' ? 'alert-warn' : 'alert-exit';
+      } else {
+        alert = signal === 'BUY' ? '✓ Mantieni' : signal === 'HOLD' ? '○ Neutro' : '⚠ Rivedi';
+        alertCls = signal === 'BUY' ? 'alert-ok' : signal === 'SELL' ? 'alert-exit' : 'alert-warn';
+      }
+      const chgStr = data.change != null ? (data.change >= 0 ? '+' : '') + data.change.toFixed(2) + '%' : '—';
+      const chgCls = data.change == null ? 'neu' : data.change >= 0 ? 'pos' : 'neg';
+      return `<div class="portfolio-row">
+        <div>
+          <div style="font-weight:600;font-size:11px">${ticker}</div>
+          <div class="${chgCls}" style="font-size:10px">${chgStr}</div>
+        </div>
+        <div style="font-weight:700;font-size:16px;font-family:'Rajdhani',sans-serif;color:${score>=65?'var(--bull)':score>=42?'var(--accent)':'var(--bear)'}">${score}</div>
+        <div class="portfolio-alert ${alertCls}">${alert}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+async function loadAll() {
+  document.getElementById('update-badge').textContent = 'Caricamento...';
+  await loadRSE();
+  loadLocalSignals();
+  loadAdvice();
+}
+
+loadAll();
+// Auto-refresh ogni 30 minuti
+setInterval(loadAll, 30 * 60 * 1000);
+</script>
+</body>
+</html>
