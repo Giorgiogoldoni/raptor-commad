@@ -304,12 +304,22 @@ const RSE_JSON = 'https://giorgiogoldoni.github.io/RAPTOR_SCENARIO_ENGINE/data/m
 
 // Chiavi localStorage usate da ciascun RAPTOR
 const LS_SOURCES = {
-  'RAPTOR One':   'raptor_cache_v2',
-  'RAPTOR Two':   'raptor_two_cache_v1',
-  'ETF Leva':     'raptor_leva_cache_v1',
+  'RAPTOR One':   'raptor_one_yahoo',
+  'RAPTOR Two':   'raptor_ranking',
+  'ETF Leva':     null,              // non usa localStorage
   'STOXX 600':    'raptor_stoxx_v3',
-  'Advice':       'raptor_advice_v1',
+  'Advice':       'rpt_advice_results',
+  'RWM Clients':  'rwm_v3_clients',  // portafoglio clienti RWM
 };
+
+const LS_TS = {
+  'RAPTOR One':  null,
+  'RAPTOR Two':  'raptor_ranking_ts',
+  'Advice':      'rpt_advice_ts',
+};
+
+// Chiavi che contengono il portafoglio reale (non segnali scanner)
+const LS_PORTFOLIO_KEYS = ['rpt_advice_results', 'rwm_v3_clients'];
 
 // Colori badge per sorgente
 const SOURCE_BADGE = {
@@ -318,6 +328,7 @@ const SOURCE_BADGE = {
   'ETF Leva':    'badge-leva',
   'STOXX 600':   'badge-stoxx',
   'Advice':      'badge-advice',
+  'RWM Clients': 'badge-advice',
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -527,35 +538,87 @@ function renderAlloc() {
 // ═══════════════════════════════════════════════════════════
 // LOAD LOCAL STORAGE — top signals
 // ═══════════════════════════════════════════════════════════
+function parseSource(source, raw) {
+  // Normalizza le strutture diverse dei vari RAPTOR
+  const result = {};
+  try {
+    const data = JSON.parse(raw);
+
+    // raptor_one_yahoo → oggetto {ticker: {score, signal, change, ...}}
+    if (source === 'RAPTOR One' && typeof data === 'object' && !Array.isArray(data)) {
+      for (const [ticker, v] of Object.entries(data)) {
+        const score = v.totalScore ?? v.score ?? v.techScore ?? 0;
+        if (score === 0 && !v.signal) continue;
+        result[ticker] = { ticker, score, signal: v.signal || scoreToSignalLocal(score), change: v.change ?? null, launchScore: v.launchScore ?? null };
+      }
+    }
+
+    // raptor_ranking → array [{ticker, display, score, signal, ...}]
+    else if (source === 'RAPTOR Two' && Array.isArray(data)) {
+      for (const v of data) {
+        const ticker = v.ticker || v.display;
+        if (!ticker) continue;
+        const score = v.score ?? v.totalScore ?? 0;
+        result[ticker] = { ticker, score, signal: v.signal || scoreToSignalLocal(score), change: v.chg ?? v.change ?? null, launchScore: null };
+      }
+    }
+
+    // raptor_stoxx_v3 → oggetto {ticker: {score, signal, ...}}
+    else if (source === 'STOXX 600' && typeof data === 'object' && !Array.isArray(data)) {
+      for (const [ticker, v] of Object.entries(data)) {
+        const score = v.totalScore ?? v.techScore ?? 0;
+        if (!score) continue;
+        result[ticker] = { ticker, score, signal: v.signal || scoreToSignalLocal(score), change: v.change ?? null, launchScore: v.launchScore ?? null };
+      }
+    }
+
+    // fallback generico — prova a leggere come oggetto o array
+    else if (typeof data === 'object' && !Array.isArray(data)) {
+      for (const [ticker, v] of Object.entries(data)) {
+        if (typeof v !== 'object') continue;
+        const score = v.totalScore ?? v.score ?? v.techScore ?? 0;
+        result[ticker] = { ticker, score, signal: v.signal || scoreToSignalLocal(score), change: v.change ?? null, launchScore: v.launchScore ?? null };
+      }
+    } else if (Array.isArray(data)) {
+      for (const v of data) {
+        const ticker = v.ticker || v.display || v.symbol;
+        if (!ticker) continue;
+        const score = v.score ?? v.totalScore ?? 0;
+        result[ticker] = { ticker, score, signal: v.signal || scoreToSignalLocal(score), change: v.chg ?? v.change ?? null, launchScore: null };
+      }
+    }
+  } catch(e) {}
+  return result;
+}
+
+function scoreToSignalLocal(s) {
+  if (s == null) return 'N/A';
+  if (s >= 65) return 'BUY';
+  if (s >= 42) return 'HOLD';
+  return 'SELL';
+}
+
 function loadLocalSignals() {
-  const allSignals = [];
-  const tickerMap = {}; // ticker → {sources[], bestScore, bestSignal}
+  const tickerMap = {};
 
   for (const [source, lsKey] of Object.entries(LS_SOURCES)) {
-    if (source === 'Advice') continue; // handled separately
+    if (source === 'Advice' || !lsKey) continue;
     try {
       const raw = localStorage.getItem(lsKey);
       if (!raw) continue;
-      const cache = JSON.parse(raw);
-      for (const [ticker, data] of Object.entries(cache)) {
-        if (!data.totalScore && !data.techScore) continue;
-        const score = data.totalScore ?? data.techScore ?? 0;
-        const signal = data.signal || 'N/A';
+      const parsed = parseSource(source, raw);
+      for (const [ticker, data] of Object.entries(parsed)) {
         if (!tickerMap[ticker]) {
-          tickerMap[ticker] = {
-            ticker, score, signal, sources: [source],
-            change: data.change, launchScore: data.launchScore ?? null,
-            name: data.name || ticker
-          };
+          tickerMap[ticker] = { ...data, sources: [source] };
         } else {
           tickerMap[ticker].sources.push(source);
-          if (score > tickerMap[ticker].score) {
-            tickerMap[ticker].score = score;
-            tickerMap[ticker].signal = signal;
+          if (data.score > tickerMap[ticker].score) {
+            tickerMap[ticker].score = data.score;
+            tickerMap[ticker].signal = data.signal;
           }
         }
       }
-    } catch(e) {}
+    } catch(e) { console.warn('[LS]', source, e); }
   }
 
   // Sort by score desc, take top 20
@@ -564,20 +627,52 @@ function loadLocalSignals() {
     .sort((a,b) => b.score - a.score)
     .slice(0, 20);
 
+  // DEBUG — mostra cosa c'è nel localStorage
+  const debugLines = [];
+  for (const [source, lsKey] of Object.entries(LS_SOURCES)) {
+    if (source === 'Advice' || source === 'RWM Clients' || !lsKey) continue;
+    const raw = localStorage.getItem(lsKey);
+    if (!raw) { debugLines.push(`❌ ${source} (${lsKey}): non trovato`); continue; }
+    try {
+      const parsed = JSON.parse(raw);
+      const isArr = Array.isArray(parsed);
+      const keys = isArr ? parsed.length + ' items' : Object.keys(parsed).slice(0,5).join(', ');
+      const parsed2 = parseSource(source, raw);
+      debugLines.push(`✓ ${source} (${lsKey}): ${isArr?'array':'object'} → ${keys} → parsed: ${Object.keys(parsed2).length} titoli`);
+      // Show first item structure
+      if (isArr && parsed[0]) {
+        debugLines.push(`  Primo item keys: ${Object.keys(parsed[0]).join(', ')}`);
+        debugLines.push(`  Valori: score=${parsed[0].score??parsed[0].totalScore??'—'} signal=${parsed[0].signal??'—'} ticker=${parsed[0].ticker??parsed[0].display??'—'}`);
+      } else if (!isArr) {
+        const firstKey = Object.keys(parsed)[0];
+        if (firstKey) {
+          const v = parsed[firstKey];
+          debugLines.push(`  Prima chiave: ${firstKey} → keys: ${typeof v === 'object' ? Object.keys(v).join(', ') : typeof v}`);
+        }
+      }
+    } catch(e) { debugLines.push(`⚠ ${source}: parse error — ${e.message}`); }
+  }
+
   if (!sorted.length) {
     document.getElementById('signals-list').innerHTML = `
-      <div class="empty">
-        <div class="big">📡</div>
-        Apri almeno una pagina RAPTOR e avvia la scansione, poi torna qui.
+      <div style="padding:12px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">
+        <div style="font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:1.5px;color:var(--accent);margin-bottom:8px">DEBUG — STATO CACHE</div>
+        ${debugLines.map(l => `<div style="font-size:10px;color:var(--text2);margin-bottom:3px;font-family:'JetBrains Mono',monospace">${l}</div>`).join('')}
+        <div style="margin-top:10px;font-size:10px;color:var(--text3)">Se vedi ✓ ma "0 titoli" il problema è nel formato del campo score/signal.</div>
       </div>`;
-    document.getElementById('signals-meta').textContent = 'Cache locale vuota';
+    document.getElementById('signals-meta').textContent = 'Debug attivo';
     return;
   }
 
   const totalCached = Object.keys(tickerMap).length;
   const buyCount = Object.values(tickerMap).filter(s => s.signal === 'BUY').length;
+  // Show which sources loaded
+  const loadedSources = Object.entries(LS_SOURCES)
+    .filter(([src, key]) => src !== 'Advice' && key && localStorage.getItem(key))
+    .map(([src]) => src);
+  const sourceInfo = loadedSources.length ? loadedSources.join(', ') : 'nessuna sorgente';
   document.getElementById('signals-meta').textContent =
-    `${totalCached} titoli in cache · ${buyCount} BUY · Top 20`;
+    `${totalCached} titoli · ${buyCount} BUY · Sorgenti: ${sourceInfo}`;
 
   document.getElementById('signals-list').innerHTML = sorted.map(s => {
     const sigCls = s.signal === 'BUY' ? 'pill-buy' : s.signal === 'SELL' ? 'pill-sell' : s.signal === 'HOLD' ? 'pill-hold' : 'pill-na';
@@ -639,15 +734,41 @@ function renderOverlap(tickerMap) {
 function loadAdvice() {
   const regime = rseData?.meta?.regime || 'NEUTRO';
   try {
-    const raw = localStorage.getItem(LS_SOURCES['Advice']);
-    if (!raw) return;
-    const cache = JSON.parse(raw);
-    const items = Object.entries(cache);
+    // Legge sia rpt_advice_results che rwm_v3_clients
+    const portfolioKeys = [
+      { key: LS_SOURCES['Advice'], label: 'Advice' },
+      { key: LS_SOURCES['RWM Clients'], label: 'RWM' }
+    ];
+    let items = [];
+    let foundLabel = '';
+    for (const { key, label } of portfolioKeys) {
+      if (!key) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw);
+        let partial = [];
+        if (Array.isArray(parsed)) {
+          partial = parsed.map(v => [v.ticker || v.display || v.id || '?', v]);
+        } else if (typeof parsed === 'object') {
+          partial = Object.entries(parsed);
+        }
+        if (partial.length > items.length) {
+          items = partial;
+          foundLabel = label;
+        }
+      } catch(e) {}
+    }
     if (!items.length) return;
 
+    const adviceTs = localStorage.getItem('rpt_advice_ts') || '';
+    const tsLabel = adviceTs ? ` · Agg. ${adviceTs}` : '';
+    document.querySelector('#advice-body').closest('.section').querySelector('.section-sub').textContent =
+      `${foundLabel} — alert di regime${tsLabel}`;
+
     document.getElementById('advice-body').innerHTML = items.map(([ticker, data]) => {
-      const score = data.totalScore ?? data.techScore ?? 0;
-      const signal = data.signal || 'N/A';
+      const score = data.totalScore ?? data.score ?? data.techScore ?? 0;
+      const signal = data.signal || scoreToSignalLocal(score);
       // Regime compatibility
       let alert, alertCls;
       if (regime === 'BEAR' || regime === 'CRISIS') {
