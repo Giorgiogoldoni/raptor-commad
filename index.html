@@ -581,8 +581,11 @@ function parseSource(source, raw) {
         else if (stato.includes('EARLY') || stato.includes('WATCH') || stato.includes('ATTENZIONE')) signal = 'HOLD';
         else if (stato.includes('GRIGIO') || stato.includes('STOP') || stato.includes('USCITA') || stato.includes('ROSSO')) signal = 'SELL';
         else signal = scoreToSignalLocal(score);
-        // Change: usa perfSett (settimanale) come riferimento principale
-        const change = v.perfSett ?? v.perfMese ?? v.change ?? null;
+        // Change: usa perfSett — è in formato decimale (0.0266 = +2.66%)
+        // se |val| < 2 assumiamo formato decimale e moltiplichiamo *100
+        let rawChg = v.perfSett ?? v.perfMese ?? v.change ?? null;
+        if (rawChg != null && Math.abs(rawChg) < 2) rawChg = rawChg * 100;
+        const change = rawChg;
         // entryDate: data inizio trend
         const entryDate = v.entryDate || null;
         // er: Efficiency Ratio — utile come proxy del momentum
@@ -654,6 +657,10 @@ function loadLocalSignals() {
           if (data.score > tickerMap[ticker].score) {
             tickerMap[ticker].score = data.score;
             tickerMap[ticker].signal = data.signal;
+            if (data.change != null) tickerMap[ticker].change = data.change;
+            if (data.entryDate) tickerMap[ticker].entryDate = data.entryDate;
+            if (data.er != null) tickerMap[ticker].er = data.er;
+            if (data.name && data.name !== ticker) tickerMap[ticker].name = data.name;
           }
         }
       }
@@ -845,21 +852,33 @@ function loadAdvice() {
       } else if (signal === 'SELL') {
         alert = '⚠ Rivedi'; alertCls = 'alert-exit';
       } else {
-        // Nessun segnale disponibile — mostra solo il dato
-        alert = score != null ? (score >= 50 ? '○ Dati parziali' : '⚠ Basso') : '— Nessun dato';
-        alertCls = score != null && score >= 50 ? 'alert-warn' : 'alert-exit';
+        // Nessun segnale esplicito — usa score come proxy
+        if (score == null || score === 0) {
+          alert = '— Non scansionato'; alertCls = 'alert-warn';
+        } else if (score >= 65) {
+          alert = '✓ Positivo'; alertCls = 'alert-ok';
+        } else if (score >= 42) {
+          alert = '○ Neutro'; alertCls = 'alert-warn';
+        } else {
+          alert = '⚠ Basso'; alertCls = 'alert-exit';
+        }
       }
 
       const scoreDisp = score != null ? score : '—';
       const scoreColor = score == null ? 'var(--text3)' : score >= 65 ? 'var(--bull)' : score >= 42 ? 'var(--accent)' : 'var(--bear)';
 
       // Nome leggibile
-      const name = data.name || data.display || data.Name || ticker;
+      const rawName = data.name || data.display || data.Name || '';
+      // Mostra il nome solo se è diverso dal ticker e non è solo il ticker senza estensione
+      const tickerBase = ticker.split('.')[0].toUpperCase();
+      const nameClean = rawName.toUpperCase().replace(/[.\-]/g,'');
+      const showName = rawName && rawName !== ticker && nameClean !== tickerBase && rawName.length > 1;
+      const name = showName ? rawName : '';
 
       return `<div class="portfolio-row">
         <div>
           <div style="font-weight:600;font-size:11px">${ticker}</div>
-          ${name !== ticker ? `<div style="font-size:9px;color:var(--text3);margin-top:1px">${name}</div>` : ''}
+          ${showName ? `<div style="font-size:9px;color:var(--text3);margin-top:1px">${name}</div>` : ''}
           <div class="${chgCls}" style="font-size:10px">${chgStr}</div>
         </div>
         <div style="font-weight:700;font-size:16px;font-family:'Rajdhani',sans-serif;color:${scoreColor}">${scoreDisp}</div>
