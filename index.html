@@ -538,56 +538,87 @@ function renderAlloc() {
 // ═══════════════════════════════════════════════════════════
 // LOAD LOCAL STORAGE — top signals
 // ═══════════════════════════════════════════════════════════
+function normalizeScore(raw) {
+  // RAPTOR Two usa score > 100 (es. ER*100 o punteggio proprietario)
+  // Normalizziamo a 0-100
+  if (raw == null) return 0;
+  if (raw > 100) return Math.min(100, Math.round(raw / 2)); // es. 155 → 77
+  return Math.round(raw);
+}
+
 function parseSource(source, raw) {
-  // Normalizza le strutture diverse dei vari RAPTOR
   const result = {};
   try {
     const data = JSON.parse(raw);
 
-    // raptor_one_yahoo → oggetto {ticker: {score, signal, change, ...}}
-    if (source === 'RAPTOR One' && typeof data === 'object' && !Array.isArray(data)) {
-      for (const [ticker, v] of Object.entries(data)) {
-        const score = v.totalScore ?? v.score ?? v.techScore ?? 0;
-        if (score === 0 && !v.signal) continue;
-        result[ticker] = { ticker, score, signal: v.signal || scoreToSignalLocal(score), change: v.change ?? null, launchScore: v.launchScore ?? null };
+    // raptor_one_yahoo → oggetto con chiave ts + dati per ticker
+    // struttura: {"ts":"...", "TICKER": {...}, ...} oppure {"TICKER":{score,signal,...}}
+    if (source === 'RAPTOR One') {
+      const obj = Array.isArray(data) ? {} : data;
+      for (const [key, v] of Object.entries(obj)) {
+        if (key === 'ts' || typeof v !== 'object' || v === null) continue;
+        // Cerca il ticker nel valore o usa la chiave
+        const ticker = v.ticker || v.display || key;
+        // Cerca score in vari campi possibili
+        const score = v.totalScore ?? v.score ?? v.techScore ?? v.Score ?? 0;
+        if (score === 0 && !v.signal && !v.Signal) continue;
+        const signal = v.signal || v.Signal || scoreToSignalLocal(normalizeScore(score));
+        const change = v.change ?? v.chg ?? v.Chg ?? v['Sett%'] ?? null;
+        result[ticker] = { ticker, score: normalizeScore(score), signal, change, launchScore: v.launchScore ?? null };
       }
     }
 
-    // raptor_ranking → array [{ticker, display, score, signal, ...}]
+    // raptor_ranking → array [{ticker/display, score, signal, chg/change, ...}]
     else if (source === 'RAPTOR Two' && Array.isArray(data)) {
       for (const v of data) {
-        const ticker = v.ticker || v.display;
+        const ticker = v.ticker || v.display || v.Ticker;
         if (!ticker) continue;
-        const score = v.score ?? v.totalScore ?? 0;
-        result[ticker] = { ticker, score, signal: v.signal || scoreToSignalLocal(score), change: v.chg ?? v.change ?? null, launchScore: null };
+        // Score può essere in vari campi — RAPTOR Two usa score proprietario > 100
+        const rawScore = v.score ?? v.Score ?? v.totalScore ?? v.ER ?? 0;
+        const score = normalizeScore(rawScore);
+        const signal = v.signal || v.Signal || scoreToSignalLocal(score);
+        // Change: cerca in vari campi
+        const change = v.change ?? v.chg ?? v['Sett%'] ?? v.sett ?? v['Mese%'] ?? null;
+        const launchScore = v.launchScore ?? null;
+        result[ticker] = { ticker, score, signal, change, launchScore };
       }
     }
 
-    // raptor_stoxx_v3 → oggetto {ticker: {score, signal, ...}}
-    else if (source === 'STOXX 600' && typeof data === 'object' && !Array.isArray(data)) {
-      for (const [ticker, v] of Object.entries(data)) {
-        const score = v.totalScore ?? v.techScore ?? 0;
+    // raptor_stoxx_v3 → oggetto {ticker: {totalScore, signal, change, launchScore}}
+    else if (source === 'STOXX 600') {
+      const obj = Array.isArray(data) ? {} : data;
+      for (const [key, v] of Object.entries(obj)) {
+        if (typeof v !== 'object' || v === null) continue;
+        const ticker = v.ticker || key;
+        const score = normalizeScore(v.totalScore ?? v.techScore ?? v.score ?? 0);
         if (!score) continue;
-        result[ticker] = { ticker, score, signal: v.signal || scoreToSignalLocal(score), change: v.change ?? null, launchScore: v.launchScore ?? null };
+        const signal = v.signal || scoreToSignalLocal(score);
+        const change = v.change ?? null;
+        result[ticker] = { ticker, score, signal, change, launchScore: v.launchScore ?? null };
       }
     }
 
-    // fallback generico — prova a leggere come oggetto o array
-    else if (typeof data === 'object' && !Array.isArray(data)) {
-      for (const [ticker, v] of Object.entries(data)) {
-        if (typeof v !== 'object') continue;
-        const score = v.totalScore ?? v.score ?? v.techScore ?? 0;
-        result[ticker] = { ticker, score, signal: v.signal || scoreToSignalLocal(score), change: v.change ?? null, launchScore: v.launchScore ?? null };
-      }
-    } else if (Array.isArray(data)) {
+    // fallback generico
+    else if (Array.isArray(data)) {
       for (const v of data) {
-        const ticker = v.ticker || v.display || v.symbol;
+        const ticker = v.ticker || v.display || v.symbol || v.Ticker;
         if (!ticker) continue;
-        const score = v.score ?? v.totalScore ?? 0;
-        result[ticker] = { ticker, score, signal: v.signal || scoreToSignalLocal(score), change: v.chg ?? v.change ?? null, launchScore: null };
+        const score = normalizeScore(v.score ?? v.totalScore ?? v.Score ?? 0);
+        const signal = v.signal || v.Signal || scoreToSignalLocal(score);
+        const change = v.change ?? v.chg ?? v['Sett%'] ?? null;
+        result[ticker] = { ticker, score, signal, change, launchScore: null };
+      }
+    } else if (typeof data === 'object') {
+      for (const [key, v] of Object.entries(data)) {
+        if (typeof v !== 'object' || v === null || key === 'ts') continue;
+        const ticker = v.ticker || key;
+        const score = normalizeScore(v.totalScore ?? v.score ?? v.techScore ?? 0);
+        const signal = v.signal || scoreToSignalLocal(score);
+        const change = v.change ?? v.chg ?? null;
+        result[ticker] = { ticker, score, signal, change, launchScore: v.launchScore ?? null };
       }
     }
-  } catch(e) {}
+  } catch(e) { console.warn('[parse]', source, e); }
   return result;
 }
 
@@ -766,29 +797,55 @@ function loadAdvice() {
     document.querySelector('#advice-body').closest('.section').querySelector('.section-sub').textContent =
       `${foundLabel} — alert di regime${tsLabel}`;
 
-    document.getElementById('advice-body').innerHTML = items.map(([ticker, data]) => {
-      const score = data.totalScore ?? data.score ?? data.techScore ?? 0;
-      const signal = data.signal || scoreToSignalLocal(score);
-      // Regime compatibility
+    // Filtra solo elementi validi
+    const validItems = items.filter(([t]) => t && t !== '?' && t.length > 1);
+    if (!validItems.length) return;
+
+    document.getElementById('advice-body').innerHTML = validItems.map(([ticker, data]) => {
+      // Score: cerca in tutti i campi possibili
+      const rawScore = data.totalScore ?? data.score ?? data.Score ?? data.techScore ?? data.punteggio ?? null;
+      const score = rawScore != null ? normalizeScore(rawScore) : null;
+      // Signal: usa direttamente quello salvato se disponibile
+      const signal = data.signal || data.Signal || data.segnale ||
+        (score != null ? scoreToSignalLocal(score) : null);
+
+      // Change: cerca in vari campi
+      const chgRaw = data.change ?? data.chg ?? data['Sett%'] ?? data.sett ?? data['Mese%'] ?? null;
+      const chgStr = chgRaw != null ? (chgRaw >= 0 ? '+' : '') + Number(chgRaw).toFixed(2) + '%' : '—';
+      const chgCls = chgRaw == null ? 'neu' : chgRaw >= 0 ? 'pos' : 'neg';
+
+      // Alert basato su regime + segnale
       let alert, alertCls;
       if (regime === 'BEAR' || regime === 'CRISIS') {
-        alert = signal === 'SELL' ? '⚠ ESCI' : '⚠ Valuta uscita';
-        alertCls = 'alert-exit';
+        alert = '⚠ Valuta uscita'; alertCls = 'alert-exit';
       } else if (regime === 'EARLY BEAR') {
         alert = signal === 'BUY' ? '✓ Tieni' : signal === 'HOLD' ? '⚡ Attenzione' : '⚠ Alleggerisci';
         alertCls = signal === 'BUY' ? 'alert-ok' : signal === 'HOLD' ? 'alert-warn' : 'alert-exit';
+      } else if (signal === 'BUY') {
+        alert = '✓ Mantieni'; alertCls = 'alert-ok';
+      } else if (signal === 'HOLD') {
+        alert = '○ Neutro'; alertCls = 'alert-warn';
+      } else if (signal === 'SELL') {
+        alert = '⚠ Rivedi'; alertCls = 'alert-exit';
       } else {
-        alert = signal === 'BUY' ? '✓ Mantieni' : signal === 'HOLD' ? '○ Neutro' : '⚠ Rivedi';
-        alertCls = signal === 'BUY' ? 'alert-ok' : signal === 'SELL' ? 'alert-exit' : 'alert-warn';
+        // Nessun segnale disponibile — mostra solo il dato
+        alert = score != null ? (score >= 50 ? '○ Dati parziali' : '⚠ Basso') : '— Nessun dato';
+        alertCls = score != null && score >= 50 ? 'alert-warn' : 'alert-exit';
       }
-      const chgStr = data.change != null ? (data.change >= 0 ? '+' : '') + data.change.toFixed(2) + '%' : '—';
-      const chgCls = data.change == null ? 'neu' : data.change >= 0 ? 'pos' : 'neg';
+
+      const scoreDisp = score != null ? score : '—';
+      const scoreColor = score == null ? 'var(--text3)' : score >= 65 ? 'var(--bull)' : score >= 42 ? 'var(--accent)' : 'var(--bear)';
+
+      // Nome leggibile
+      const name = data.name || data.display || data.Name || ticker;
+
       return `<div class="portfolio-row">
         <div>
           <div style="font-weight:600;font-size:11px">${ticker}</div>
+          ${name !== ticker ? `<div style="font-size:9px;color:var(--text3);margin-top:1px">${name}</div>` : ''}
           <div class="${chgCls}" style="font-size:10px">${chgStr}</div>
         </div>
-        <div style="font-weight:700;font-size:16px;font-family:'Rajdhani',sans-serif;color:${score>=65?'var(--bull)':score>=42?'var(--accent)':'var(--bear)'}">${score}</div>
+        <div style="font-weight:700;font-size:16px;font-family:'Rajdhani',sans-serif;color:${scoreColor}">${scoreDisp}</div>
         <div class="portfolio-alert ${alertCls}">${alert}</div>
       </div>`;
     }).join('');
